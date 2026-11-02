@@ -1,0 +1,20 @@
+{
+  "name": "cdk-native",
+  "interface": {
+    "displayName": "CDK 充值"
+  },
+  "plugins": [
+    {
+      "name": "codex-native-assist",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codex-native-assist"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
