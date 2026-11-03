@@ -1,0 +1,26 @@
+{
+  "name": "codex-native-assist",
+  "version": "2.3",
+  "description": "CDK 充值：点侧边栏的「CDK 充值」，在小窗口里绑定账户、填入 CDK，直接在小鸟AI 卡密兑换站点完成充值。",
+  "author": {
+    "name": "Codex Native Assist"
+  },
+  "keywords": [
+    "cdk",
+    "recharge",
+    "mcp"
+  ],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "CDK 充值",
+    "shortDescription": "侧边栏打开充值窗口：绑定账户 + 填 CDK 完成充值",
+    "longDescription": "点 Codex 侧边栏的「CDK 充值」打开本地小窗口：填入 CDK，点一键充值，由本机窗口直接向小鸟AI 兑换站点提交完成充值。窗口不记录输入内容，成功后自动清空。本插件不向模型提供任何工具。",
+    "developerName": "CDK 充值",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Read"
+    ],
+    "defaultPrompt": []
+  }
+}
